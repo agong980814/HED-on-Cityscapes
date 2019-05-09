@@ -1,5 +1,5 @@
 import torch.utils.data as data
-from PIL import Image
+from PIL import Image, ImageFilter
 import cv2
 import json
 import os
@@ -14,12 +14,11 @@ from operator import itemgetter
 def make_dataset(dir):
     path = []
     dir = os.path.expanduser(dir)
-    seg_subdir = dir + '/seg'
-    img_subdir = dir + '/img'
-    cities = [city for city in os.listdir(seg_subdir)]
+    cities = [city for city in os.listdir(dir)]
     for city in cities:
-        seg_city_subdir = os.path.join(seg_subdir, city)
-        img_city_subdir = os.path.join(img_subdir, city)
+        city_subdir = os.path.join(dir, city)
+        seg_city_subdir = os.path.join(city_subdir, 'seg')
+        img_city_subdir = os.path.join(city_subdir, 'img')
         ff = [f for f in os.listdir(seg_city_subdir) if f.endswith('_seg.png')]
         for seg_fn in ff:
             img_fn = seg_fn.split('_')[0] + '_img.png'
@@ -123,6 +122,7 @@ def pil_loader_seg(path):
     with open(path, 'rb') as f:
         im = Image.open(f)
         # im.resize((256,256), Image.NEAREST)
+        im = im.filter(ImageFilter.MaxFilter(3))
         return im.convert('L')
 
 def pil_loader_8bit(path):

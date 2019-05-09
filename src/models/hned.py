@@ -67,7 +67,7 @@ class HNED(torch.nn.Module):
 		)
 
         # put this to trainer get_model
-		self.load_state_dict(torch.load('./network-' + 'bsds500' + '.pytorch'))
+		# self.load_state_dict(torch.load('./network-' + 'bsds500' + '.pytorch'))
 	# end
 
 	def forward(self, tensorInput):
@@ -95,13 +95,13 @@ class HNED(torch.nn.Module):
 		tensorScoreFou = torch.nn.functional.interpolate(input=tensorScoreFou, size=(tensorInput.size(2), tensorInput.size(3)), mode='bilinear', align_corners=False)
 		tensorScoreFiv = torch.nn.functional.interpolate(input=tensorScoreFiv, size=(tensorInput.size(2), tensorInput.size(3)), mode='bilinear', align_corners=False)
 
-        d1 = F.sigmoid(tensorScoreOne)
-        d2 = F.sigmoid(tensorScoreTwo)
-        d3 = F.sigmoid(tensorScoreThr)
-        d4 = F.sigmoid(tensorScoreFou)
-        d5 = F.sigmoid(tensorScoreFiv)
-        fuse = self.moduleCombine(torch.cat([ tensorScoreOne, tensorScoreTwo, tensorScoreThr, tensorScoreFou, tensorScoreFiv ], 1))
+		d1 = F.sigmoid(tensorScoreOne)
+		d2 = F.sigmoid(tensorScoreTwo)
+		d3 = F.sigmoid(tensorScoreThr)
+		d4 = F.sigmoid(tensorScoreFou)
+		d5 = F.sigmoid(tensorScoreFiv)
+		fuse = self.moduleCombine(torch.cat([ tensorScoreOne, tensorScoreTwo, tensorScoreThr, tensorScoreFou, tensorScoreFiv ], 1))
 
-        return d1, d2, d3, d4, d5, fuse
+		return d1, d2, d3, d4, d5, fuse
 	# end
 #end

@@ -52,9 +52,29 @@ color_map = [
 [0, 0, 0]   # None
 ]
 
+def get_hned_model(args):
+    modelPath = '/home/agong/HED-on-Cityscapes/model/network-bsds500.pytorch'
+    hed = models.__dict__['HNED']().cuda(args.rank)
+    hed.load_state_dict(torch.load(modelPath))
+
+    lr = 1e-6
+    
+    fuse_params = list(map(id, hed.moduleCombine.parameters()))
+    conv5_params = list(map(id, hed.moduleVggFiv.parameters()))
+    base_params = filter(lambda p: id(p) not in conv5_params+fuse_params,
+                        hed.parameters())
+
+    optimizer = torch.optim.SGD([
+                {'params': base_params},
+                {'params': hed.moduleVggFiv.parameters(), 'lr': lr * 100},
+                {'params': hed.moduleCombine.parameters(), 'lr': lr * 0.001}
+                ], lr=lr, momentum=0.9)
+    return hed, optimizer
+    
+
+
 def get_hed_model(args):
-    dataRoot = 'data/HED-BSDS/'
-    modelPath = 'model/vgg16.pth'
+    modelPath = '/home/agong/HED-on-Cityscapes/model/vgg16.pth'
     hed = models.__dict__['HED']().cuda(args.rank)
     hed.apply(weights_init)
     pretrained_dict = torch.load(modelPath)
@@ -100,7 +120,7 @@ class Trainer:
 
         torch.cuda.set_device(args.rank)
 
-        self.generator, self.optimG = get_hed_model(args)
+        self.generator, self.optimG = get_hned_model(args)
         self.generator = torch.nn.parallel.DistributedDataParallel(self.generator, device_ids=[args.rank])
         self.lrDecayEpochs = {3,5,8,10,12,15,18}
         self.gamma = 0.1
@@ -156,6 +176,8 @@ class Trainer:
             # forward pass
             seg = seg.cuda(self.args.rank, non_blocking=True)
             img = img.cuda(self.args.rank, non_blocking=True)
+            with torch.no_grad():
+                seg = torch.clamp((seg*1.1), 0.0, 1.0)
             if random.random() < 0.5:
                 with torch.no_grad():
                     seg = torch.flip(seg, [3])
@@ -177,6 +199,12 @@ class Trainer:
             self.sync([self.loss])
             self.loss.backward()
             self.optimG.step()
+
+            with torch.no_grad():
+                dd = d6.clone()
+                # self.args.logger.debug(dd.max())
+                dd[dd>0.3] = 0.8
+                dd[dd<=0.3] = 0.0
             
 
             comp_time = time() - end
@@ -187,17 +215,17 @@ class Trainer:
                 self.args.logger.info(
                     'Epoch [{epoch:d}/{tot_epoch:d}][{cur_batch:d}/{tot_batch:d}] '
                     'load [{load_time:.3f}s] comp [{comp_time:.3f}s] '
-                    'G_loss [{G_loss:.4f}] D_loss [{D_loss:.4f}]'.format(
+                    'loss [{loss:.4f}] '.format(
                         epoch=self.epoch, tot_epoch=self.args.epochs,
                         cur_batch=i+1, tot_batch=len(self.train_loader),
                         load_time=load_time, comp_time=comp_time,
-                        G_loss=self.loss_G.item(), D_loss = self.loss_D.item()
+                        loss=self.loss.item()
                     )
                 )
                 self.writer.add_scalar('train/loss', self.loss.item(), self.global_step)
                 self.writer.add_image('train/img', make_grid(img, normalize=True), self.global_step)
                 self.writer.add_image('train/edge gt', make_grid(seg, normalize=True), self.global_step)
-                self.writer.add_image('train/edge d1', make_grid(d1, normalize=True), self.global_step)
+                self.writer.add_image('train/edge dd', make_grid(dd, normalize=True), self.global_step)
                 self.writer.add_image('train/edge', make_grid(d6, normalize=True), self.global_step)
 
 
@@ -216,10 +244,8 @@ class Trainer:
                  # forward pass
                 seg = seg.cuda(self.args.rank, non_blocking=True)
                 img = img.cuda(self.args.rank, non_blocking=True)
-                if random.random() < 0.5:
-                    with torch.no_grad():
-                        seg = torch.flip(seg, [3])
-                        img = torch.flip(img, [3])
+                with torch.no_grad():
+                    seg = torch.clamp((seg*1.1), 0.0, 1.0)
 
                 d1, d2, d3, d4, d5, d6 = self.generator(img)
 
@@ -302,8 +328,8 @@ class Trainer:
             % (ckpt['arch'], self.args.arch))
 
         self.epoch = ckpt['epoch']
-        self.model.load_state_dict(ckpt['generator'])
-        self.optimizer.load_state_dict(ckpt['optimG'])
+        self.generator.load_state_dict(ckpt['generator'])
+        self.optimG.load_state_dict(ckpt['optimG'])
 
         self.args.logger.info('Checkpoint loaded')
 
