@@ -87,23 +87,23 @@ def main():
 	parser.add_argument('-d', '--dataset', type=str, default='cityscape',
 						help='training dataset', choices=['cityscape'])
 	parser.add_argument('--train_dir', type=str,
-						default='/data/agong/train', help='Cityscape train dir')
+						default='/data/agong/HED/train', help='Cityscape train dir')
 	parser.add_argument('--val_dir', type=str,
-						default='/data/agong/val', help='Cityscape val dir')
+						default='/data/agong/HED/val', help='Cityscape val dir')
 	parser.add_argument('--test_dir', type=str,
 						default='/data/agong/test', help='Cityscape test dir')
 	parser.add_argument('--validate', action='store_true',
 						help='whether eval after each training')
 	parser.add_argument('--val_interval', dest='val_interval',
 						help='number of epochs to evaluate',type=int,default=1)
-	parser.add_argument('-a', '--arch', type=str, default='ResnetGenerator', help='model to use',
-						choices=['GridNet','CoordGridNet','ResnetGenerator'])
+	parser.add_argument('-a', '--arch', type=str, default='HED', help='model to use',
+						choices=['GridNet','CoordGridNet','ResnetGenerator','HED'])
 	parser.add_argument('--discriminator', type=str, default='NLayerDiscriminator', help='model to use')
 	parser.add_argument('--generator', type=str, default='ResnetGenerator', help='model to use')
 	parser.add_argument('-bs','--batch_size', type=int,
 						default=32, help='Batch size (over multiple gpu)')
 	parser.add_argument('-e', '--epochs', type=int,
-						default=10, help='Number of training epochs')
+						default=20, help='Number of training epochs')
 	parser.add_argument('--resume', type=str, default=None,
                         help='Resume from checkpoint')
 	parser.add_argument('--img1', type=str, default=None, help='First image url')

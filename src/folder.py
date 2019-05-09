@@ -14,34 +14,16 @@ from operator import itemgetter
 def make_dataset(dir):
     path = []
     dir = os.path.expanduser(dir)
-    seg_subdir = dir + '/deeplab256_label'
-    # seg_subdir = dir + '/deeplab'
-    img_subdir = dir + '/leftImg256'
+    seg_subdir = dir + '/seg'
+    img_subdir = dir + '/img'
     cities = [city for city in os.listdir(seg_subdir)]
     for city in cities:
         seg_city_subdir = os.path.join(seg_subdir, city)
         img_city_subdir = os.path.join(img_subdir, city)
-        ff = [f for f in os.listdir(seg_city_subdir) if f.endswith('.png')]
-        idx_snippet = set([int( f.split('_')[1]) for f in ff])
-        for idx in idx_snippet:
-            fs = [int(f.split('_')[2]) for f in ff if f.startswith(city+'_'+str(idx).zfill(6))]
-            fs.sort()
-            ranges = []
-            for k,g in groupby(enumerate(fs),lambda x:x[0]-x[1]):
-                ranges.append(list(map(itemgetter(1),g)))
-            suffix = []
-            for r in ranges:
-                for i in range(r[0], r[-1]-6):
-                    suffix.append([str(i).zfill(6), str(i+3).zfill(6), str(i+6).zfill(6)])
-            prefix = os.path.join(city, city+'_'+str(idx).zfill(6)+'_')
-            suffix_dir = []
-            for s in suffix:
-                suffix_dir.append([prefix+s[i] for i in range(3)])
-            for ss in suffix_dir:
-                seg_p = [s+'_gtFine_myseg_id.png' for s in ss]
-                # seg_p = [s+'_leftImgseg.png' for s in ss]
-                img_p = [s+'_leftImg8bit.png' for s in ss]
-                path.append(([os.path.join(seg_subdir,p) for p in seg_p], [os.path.join(img_subdir,p) for p in img_p]))
+        ff = [f for f in os.listdir(seg_city_subdir) if f.endswith('_seg.png')]
+        for seg_fn in ff:
+            img_fn = seg_fn.split('_')[0] + '_img.png'
+            path.append((os.path.join(seg_city_subdir, seg_fn), os.path.join(img_city_subdir, img_fn)))
 
     return path
 
@@ -79,7 +61,7 @@ class DatasetFolder(data.Dataset):
         # self.targets = [s[1][1] for s in samples]
 
         self.transform = transform
-        # self.target_transform = target_transform
+        self.target_transform = target_transform
 
 
     def __getitem__(self, index):
@@ -89,18 +71,13 @@ class DatasetFolder(data.Dataset):
         Returns:
             tuple: (sample, target) where target is class_index of the target class.
         """
-        seg_paths, img_paths = self.samples[index]
-        seg = [cv2_loader_seg(p) for p in seg_paths]
-        img = [cv2_loader_RGB(p) for p in img_paths]
-        if self.transform is not None:
-            # seg = [self.transform(s) for s in seg]
-            seg = [torch.from_numpy(s) for s in seg] # keep its range from 0-20
-            seg[0] = seg[0].float().unsqueeze_(0)
-            seg[1] = seg[1].float().unsqueeze_(0)
-            seg[2] = seg[2].long()
-            img = [self.transform(i) for i in img]
-        to_normalize = transforms.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225])
-        return to_normalize(img[0]), seg[0], to_normalize(img[1]), seg[1], to_normalize(img[2]), seg[2] # also normalize GT image
+        seg_path, img_path = self.samples[index]
+        seg = pil_loader_seg(seg_path)
+        img = pil_loader_RGB(img_path)
+        if self.transform is not None and self.target_transform is not None:
+            seg = self.target_transform(seg)
+            img = self.transform(img)
+        return seg, img
 
     def __len__(self):
         return len(self.samples)
@@ -130,7 +107,7 @@ def cv2_loader_seg(path):
         im = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
         # im = cv2.imread(path)
         # im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-        im = cv2.resize(im, dsize=(256,256), interpolation=cv2.INTER_NEAREST)
+        # im = cv2.resize(im, dsize=(256,256), interpolation=cv2.INTER_NEAREST)
         return im
 
 
@@ -139,14 +116,14 @@ def pil_loader_RGB(path):
     # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
     with open(path, 'rb') as f:
         im = Image.open(f)
-        im.resize((256,256), Image.ANTIALIAS)
+        # im.resize((256,256), Image.ANTIALIAS)
         return im.convert('RGB')
 
 def pil_loader_seg(path):
     with open(path, 'rb') as f:
         im = Image.open(f)
-        im.resize((256,256), Image.NEAREST)
-        return im.convert('RGB')
+        # im.resize((256,256), Image.NEAREST)
+        return im.convert('L')
 
 def pil_loader_8bit(path):
     # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
